@@ -50,7 +50,7 @@ class HiveService {
   // Find user by userId
   static User? findUserById(String userId) {
     return _usersBox.values.firstWhere(
-      (user) => user.userId == userId,
+      (user) => user.userId.toString() == userId,
       orElse: () => throw StateError('User not found'),
     );
   }

@@ -5,6 +5,8 @@ import 'package:users_management/app_theme.dart';
 import 'package:hive/hive.dart';
 
 // Clean Activations class - contains only activation data and logic
+
+// Clean Activations class - contains only activation data and logic
 @HiveType(typeId: 0)
 class Activations {
   @HiveField(0)
@@ -25,6 +27,8 @@ class Activations {
   final String notes;
   @HiveField(8)
   final double fullPrice;
+  @HiveField(9)
+  final String tower;
 
   Activations({
     required this.activationDate,
@@ -36,6 +40,7 @@ class Activations {
     required this.payed,
     this.notes = '',
     this.fullPrice = 0,
+    this.tower = 'N',
   });
 
   // Calculate remaining debt
@@ -67,6 +72,7 @@ class Activations {
       activationDate: activationDate,
       expiryDate: expiryDate,
       type: type,
+      tower: tower,
       paymentMethod: paymentMethod,
       status: status,
       pricePaid: newPricePaid,
@@ -106,31 +112,37 @@ class Activations {
 @HiveType(typeId: 1)
 class User {
   @HiveField(0)
-  final String name;
+  final String userName;
   @HiveField(1)
-  final String userId;
+  final int userId;
   @HiveField(2)
   final String phone;
   @HiveField(3)
   String notes;
   @HiveField(4)
   List<Activations> activations = [];
+  @HiveField(5)
+  String? name;
 
   // Form controllers for dialogs
   late DateTime activationDatePicker;
   late DateTime repaymentDate;
-  TextEditingController pricePaidController = TextEditingController();
-  TextEditingController notesController = TextEditingController();
+
+  // Controllers for user info
+  final TextEditingController pricePaidController = TextEditingController();
+  final TextEditingController notesController = TextEditingController();
   String? selectedSubscriptionType = 'A35';
+  String? selectedTowerType = 'N';
   String selectedPaymentMethod = 'Cash';
 
   // Static dropdown options
   static List<String> subscriptionTypesA = ['A35', 'A45', 'A75', 'A150'];
   static List<String> subscriptionTypesB = ['B30', 'B35', 'B45', 'B75'];
   static List<String> paymentMethods = ['Cash', 'MasterCard'];
+  static List<String> towers = ['N', 'B', 'M', 'BS', 'NB'];
 
   User({
-    required this.name,
+    required this.userName,
     required this.userId,
     required this.phone,
     this.notes = "no notes",
@@ -142,6 +154,13 @@ class User {
     activations.add(activation);
   }
 
+  // Update activation at a specific index
+  void updateActivation(int index, Activations newActivation) {
+    if (index >= 0 && index < activations.length) {
+      activations[index] = newActivation;
+    }
+  }
+
   // Remove activation by index
   void removeActivation(int index) {
     if (index >= 0 && index < activations.length) {
@@ -149,11 +168,12 @@ class User {
     }
   }
 
-  // Update activation at specific index
-  void updateActivation(int index, Activations newActivation) {
-    if (index >= 0 && index < activations.length) {
-      activations[index] = newActivation;
-    }
+  // Days left for the latest activation
+  int get daysLeft {
+    if (activations.isEmpty) return 0;
+    final latestActivation = activations.last;
+    final difference = latestActivation.expiryDate.difference(DateTime.now());
+    return difference.inDays;
   }
 
   // Get total debt for this user
@@ -166,8 +186,11 @@ class User {
   // Get active activations count
   int get activeActivationsCount {
     return activations
-        .where((activation) =>
-            activation.status && activation.expiryDate.isAfter(DateTime.now()))
+        .where(
+          (activation) =>
+              activation.status &&
+              activation.expiryDate.isAfter(DateTime.now()),
+        )
         .length;
   }
 
@@ -203,8 +226,784 @@ class User {
     }
   }
 
-  // UI Methods
+  // Static method to show add user dialog
+  static Future<User?> showAddUserDialog(BuildContext context, int id) async {
+    final TextEditingController userNameController = TextEditingController();
+    final TextEditingController phoneController = TextEditingController();
+    bool includeActivation = false;
+
+    // Variables for activation (if included)
+    DateTime activationDatePicker = DateTime.now();
+    DateTime repaymentDate = DateTime.now().add(Duration(days: 30));
+    final TextEditingController pricePaidController = TextEditingController();
+    final TextEditingController notesController = TextEditingController();
+    String selectedSubscriptionType = 'A35';
+    String selectedTowerType = 'N';
+    String selectedPaymentMethod = 'Cash';
+
+    return showDialog<User?>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              backgroundColor: AppTheme.cardColor,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              title: Row(
+                children: [
+                  Container(
+                    padding: EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      Icons.person_add,
+                      color: AppTheme.primaryColor,
+                      size: 24,
+                    ),
+                  ),
+                  SizedBox(width: 12),
+                  Text('Add New User', style: AppTheme.titleLarge),
+                ],
+              ),
+              content: SizedBox(
+                width: MediaQuery.of(context).size.width * 0.8,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // User Name TextField
+                      Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.1),
+                              blurRadius: 4,
+                              offset: Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: TextField(
+                          controller: userNameController,
+                          decoration: AppTheme.inputDecoration('User Name')
+                              .copyWith(
+                                prefixIcon: Icon(
+                                  Icons.person,
+                                  color: AppTheme.primaryColor,
+                                ),
+                              ),
+                          style: AppTheme.bodyMedium,
+                        ),
+                      ),
+                      SizedBox(height: 16),
+
+                      // Phone TextField
+                      Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.1),
+                              blurRadius: 4,
+                              offset: Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: TextField(
+                          controller: phoneController,
+                          decoration: AppTheme.inputDecoration('Phone Number')
+                              .copyWith(
+                                prefixIcon: Icon(
+                                  Icons.phone,
+                                  color: AppTheme.accentColor,
+                                ),
+                              ),
+                          style: AppTheme.bodyMedium,
+                          keyboardType: TextInputType.phone,
+                        ),
+                      ),
+                      SizedBox(height: 20),
+
+                      // Include Activation Switch
+                      Container(
+                        padding: EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: AppTheme.surfaceColor,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: AppTheme.borderColor.withValues(alpha: 0.3),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.subscriptions,
+                              color: AppTheme.primaryColor,
+                              size: 20,
+                            ),
+                            SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                'Add initial activation',
+                                style: AppTheme.bodyMedium.copyWith(
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                            Switch(
+                              value: includeActivation,
+                              onChanged: (value) {
+                                setState(() {
+                                  includeActivation = value;
+                                });
+                              },
+                              activeColor: AppTheme.primaryColor,
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // Activation Content (conditionally shown)
+                      if (includeActivation) ...[
+                        SizedBox(height: 20),
+                        Container(
+                          padding: EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: const Color.fromARGB(
+                              255,
+                              76,
+                              175,
+                              79,
+                            ).withValues(alpha: 0.05),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: AppTheme.primaryColor.withValues(
+                                alpha: 0.2,
+                              ),
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.add_circle,
+                                    color: AppTheme.primaryColor,
+                                    size: 20,
+                                  ),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'Initial Activation Details',
+                                    style: AppTheme.titleMedium.copyWith(
+                                      color: AppTheme.primaryColor,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              SizedBox(height: 16),
+
+                              // Activation Date Picker
+                              buildDatePicker(
+                                context: context,
+                                setState: setState,
+                                title: 'Activation Date',
+                                selectedDate: activationDatePicker,
+                                icon: Icons.calendar_month,
+                                onDateSelected: (picked) {
+                                  setState(() {
+                                    activationDatePicker = picked;
+                                  });
+                                },
+                              ),
+                              SizedBox(height: 16),
+
+                              // Subscription Type Dropdown
+                              Container(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(12),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: .1),
+                                      blurRadius: 4,
+                                      offset: Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: DropdownButtonFormField<String>(
+                                  value: selectedSubscriptionType,
+                                  decoration: AppTheme.inputDecoration(
+                                    'Subscription Type',
+                                  ),
+                                  dropdownColor: AppTheme.surfaceColor,
+                                  icon: Icon(
+                                    Icons.arrow_drop_down,
+                                    color: AppTheme.accentColor,
+                                  ),
+                                  style: AppTheme.bodyMedium,
+                                  items: [
+                                    // Category A Header
+                                    DropdownMenuItem<String>(
+                                      value: null,
+                                      enabled: false,
+                                      child: Container(
+                                        padding: EdgeInsets.symmetric(
+                                          vertical: 8.0,
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Icon(
+                                              Icons.local_offer,
+                                              color: AppTheme.primaryColor,
+                                              size: 16,
+                                            ),
+                                            SizedBox(width: 8),
+                                            Text(
+                                              'الاشتراك الوطني',
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                color: AppTheme.primaryColor,
+                                                fontSize: 14,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                    // Category A Items
+                                    ...subscriptionTypesA.map((String type) {
+                                      return DropdownMenuItem<String>(
+                                        value: type,
+                                        child: Padding(
+                                          padding: EdgeInsets.only(left: 24.0),
+                                          child: Row(
+                                            children: [
+                                              Container(
+                                                width: 8,
+                                                height: 8,
+                                                decoration: BoxDecoration(
+                                                  color:
+                                                      AppTheme.secondaryColor,
+                                                  shape: BoxShape.circle,
+                                                ),
+                                              ),
+                                              SizedBox(width: 12),
+                                              Text(
+                                                type,
+                                                style: AppTheme.bodyMedium,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      );
+                                    }),
+
+                                    // Divider
+                                    DropdownMenuItem<String>(
+                                      value: null,
+                                      enabled: false,
+                                      child: Divider(
+                                        height: 1,
+                                        color: AppTheme.borderColor,
+                                        thickness: 1,
+                                      ),
+                                    ),
+
+                                    // Category B Header
+                                    DropdownMenuItem<String>(
+                                      value: null,
+                                      enabled: false,
+                                      child: Container(
+                                        padding: EdgeInsets.symmetric(
+                                          vertical: 8.0,
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Icon(
+                                              Icons.cell_tower,
+                                              color: AppTheme.accentColor,
+                                              size: 16,
+                                            ),
+                                            SizedBox(width: 8),
+                                            Text(
+                                              'اشتراك البرج',
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                color: AppTheme.accentColor,
+                                                fontSize: 14,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                    // Category B Items
+                                    ...subscriptionTypesB.map((String type) {
+                                      return DropdownMenuItem<String>(
+                                        value: type,
+                                        child: Padding(
+                                          padding: EdgeInsets.only(left: 24.0),
+                                          child: Row(
+                                            children: [
+                                              Container(
+                                                width: 8,
+                                                height: 8,
+                                                decoration: BoxDecoration(
+                                                  color: AppTheme.accentColor,
+                                                  shape: BoxShape.circle,
+                                                ),
+                                              ),
+                                              SizedBox(width: 12),
+                                              Text(
+                                                type,
+                                                style: AppTheme.bodyMedium,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      );
+                                    }),
+                                  ],
+                                  onChanged: (String? newValue) {
+                                    if (newValue != null) {
+                                      setState(() {
+                                        selectedSubscriptionType = newValue;
+                                      });
+                                    }
+                                  },
+                                ),
+                              ),
+                              SizedBox(height: 20),
+
+                              // Tower Dropdown
+                              Container(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(12),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(
+                                        alpha: 0.1,
+                                      ),
+                                      blurRadius: 4,
+                                      offset: Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: DropdownButtonFormField<String>(
+                                  value: selectedTowerType,
+                                  decoration: AppTheme.inputDecoration('Tower'),
+                                  dropdownColor: AppTheme.surfaceColor,
+                                  icon: Icon(
+                                    Icons.arrow_drop_down,
+                                    color: AppTheme.accentColor,
+                                  ),
+                                  style: AppTheme.bodyMedium,
+                                  items: towers.map((String type) {
+                                    return DropdownMenuItem<String>(
+                                      value: type,
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            Icons.cell_tower,
+                                            color: const Color.fromARGB(
+                                              255,
+                                              226,
+                                              231,
+                                              226,
+                                            ),
+                                            size: 18,
+                                          ),
+                                          Padding(
+                                            padding: EdgeInsets.only(
+                                              left: 24.0,
+                                            ),
+                                            child: Text(
+                                              type,
+                                              style: AppTheme.bodyMedium,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  }).toList(),
+                                  onChanged: (String? newValue) {
+                                    if (newValue != null) {
+                                      setState(() {
+                                        selectedTowerType = newValue;
+                                      });
+                                    }
+                                  },
+                                ),
+                              ),
+                              SizedBox(height: 16),
+
+                              // Payment Method Dropdown
+                              Container(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(12),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(
+                                        alpha: 0.1,
+                                      ),
+                                      blurRadius: 4,
+                                      offset: Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: DropdownButtonFormField<String>(
+                                  value: selectedPaymentMethod,
+                                  decoration: AppTheme.inputDecoration(
+                                    'Payment Method',
+                                  ),
+                                  dropdownColor: AppTheme.surfaceColor,
+                                  icon: Icon(
+                                    Icons.payment,
+                                    color: AppTheme.successColor,
+                                  ),
+                                  style: AppTheme.bodyMedium,
+                                  items: paymentMethods.map((String method) {
+                                    return DropdownMenuItem<String>(
+                                      value: method,
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            method == 'Cash'
+                                                ? Icons.money
+                                                : Icons.credit_card,
+                                            color: AppTheme.successColor,
+                                            size: 18,
+                                          ),
+                                          SizedBox(width: 12),
+                                          Text(
+                                            method,
+                                            style: AppTheme.bodyMedium,
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  }).toList(),
+                                  onChanged: (String? newValue) {
+                                    setState(() {
+                                      selectedPaymentMethod = newValue!;
+                                    });
+                                  },
+                                ),
+                              ),
+                              SizedBox(height: 16),
+
+                              // Price Paid TextField
+                              Container(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(12),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(
+                                        alpha: 0.1,
+                                      ),
+                                      blurRadius: 4,
+                                      offset: Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: TextField(
+                                  controller: pricePaidController,
+                                  decoration:
+                                      AppTheme.inputDecoration(
+                                        'How much paid?',
+                                      ).copyWith(
+                                        prefixIcon: Icon(
+                                          Icons.attach_money,
+                                          color: AppTheme.successColor,
+                                        ),
+                                      ),
+                                  style: AppTheme.bodyMedium,
+                                  keyboardType: TextInputType.number,
+                                ),
+                              ),
+                              SizedBox(height: 16),
+
+                              // Repayment Date Picker
+                              buildDatePicker(
+                                context: context,
+                                setState: setState,
+                                title: 'Repayment Date',
+                                selectedDate: repaymentDate,
+                                icon: Icons.schedule,
+                                onDateSelected: (picked) {
+                                  setState(() {
+                                    repaymentDate = picked;
+                                  });
+                                },
+                              ),
+                              SizedBox(height: 16),
+
+                              // Notes TextField
+                              Container(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(12),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(
+                                        alpha: 0.1,
+                                      ),
+                                      blurRadius: 4,
+                                      offset: Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: TextField(
+                                  controller: notesController,
+                                  maxLines: 2,
+                                  decoration: AppTheme.inputDecoration('Notes')
+                                      .copyWith(
+                                        prefixIcon: Icon(
+                                          Icons.note,
+                                          color: AppTheme.secondaryColor,
+                                        ),
+                                        alignLabelWithHint: true,
+                                      ),
+                                  style: AppTheme.bodyMedium,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              actions: <Widget>[
+                TextButton(
+                  style: AppTheme.textButtonStyle,
+                  child: Text('Cancel'),
+                  onPressed: () {
+                    if (Navigator.canPop(context)) {
+                      Navigator.of(context).pop();
+                    }
+                  },
+                ),
+                ElevatedButton(
+                  style: AppTheme.primaryButtonStyle,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.check_circle, size: 18),
+                      SizedBox(width: 8),
+                      Text('Create User'),
+                    ],
+                  ),
+                  onPressed: () {
+                    // Validate input
+                    if (userNameController.text.trim().isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          duration: Duration(seconds: 1),
+                          content: Text('Please enter a user name'),
+                          backgroundColor: AppTheme.errorColor,
+                        ),
+                      );
+                      return;
+                    }
+
+                    // Generate unique user ID (you might want to implement your own logic)
+                    int userId = id;
+
+                    // Create new user
+                    User newUser = User(
+                      userName: userNameController.text.trim(),
+                      userId: userId,
+                      phone: phoneController.text.trim(),
+                    );
+
+                    // Add activation if requested
+                    if (includeActivation) {
+                      double pricePaid =
+                          double.tryParse(pricePaidController.text) ?? 0;
+                      double fullPrice = newUser._getSubscriptionPrice(
+                        selectedSubscriptionType,
+                      );
+
+                      Activations newActivation = Activations(
+                        activationDate: activationDatePicker,
+                        expiryDate: repaymentDate,
+                        type: selectedSubscriptionType,
+                        tower: selectedTowerType,
+                        paymentMethod: selectedPaymentMethod,
+                        status: true,
+                        pricePaid: pricePaid,
+                        payed: pricePaid >= fullPrice,
+                        fullPrice: fullPrice,
+                      );
+
+                      newUser.addActivation(newActivation);
+                      // Navigator.of(context).pop();
+
+                      // Show success message
+                      SnackBar(
+                        duration: Duration(seconds: 2),
+                        content: Text('User created successfully!'),
+                        backgroundColor: AppTheme.successColor,
+                      );
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          duration: Duration(seconds: 2),
+                          content: Text('Activation added successfully!'),
+                          backgroundColor: AppTheme.successColor,
+                        ),
+                      );
+                    }
+                    Navigator.of(context).pop(newUser);
+                  },
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // You'll need to implement these helper methods for the activations dialog:
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.subscriptions_outlined,
+            size: 64,
+            color: AppTheme.textHint,
+          ),
+          SizedBox(height: 16),
+          Text(
+            'No activations yet',
+            style: AppTheme.titleMedium.copyWith(color: AppTheme.textHint),
+          ),
+          SizedBox(height: 8),
+          Text(
+            'Add the first activation to get started',
+            style: AppTheme.bodyMedium.copyWith(color: AppTheme.textHint),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDebtManagementDialog(BuildContext context, StateSetter setState) {
+    // Implement debt management dialog here
+    // This would allow users to make payments on debts
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Debt Management'),
+
+        content: Text('Debt management functionality would go here'),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+            },
+            child: Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Helper method to build date picker widget
+  static Widget buildDatePicker({
+    required BuildContext context,
+    required StateSetter setState,
+    required String title,
+    required DateTime selectedDate,
+    required IconData icon,
+    required Function(DateTime) onDateSelected,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.1),
+            blurRadius: 4,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: InkWell(
+        onTap: () async {
+          final DateTime? picked = await showDatePicker(
+            context: context,
+            initialDate: selectedDate,
+            firstDate: DateTime(2020),
+            lastDate: DateTime(2030),
+            builder: (context, child) {
+              return Theme(
+                data: Theme.of(context).copyWith(
+                  colorScheme: ColorScheme.light(
+                    primary: AppTheme.primaryColor,
+                    onPrimary: Colors.white,
+                    surface: AppTheme.surfaceColor,
+                    onSurface: AppTheme.textPrimary,
+                  ),
+                ),
+                child: child!,
+              );
+            },
+          );
+          if (picked != null && picked != selectedDate) {
+            onDateSelected(picked);
+          }
+        },
+        child: Container(
+          padding: EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppTheme.surfaceColor,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: AppTheme.borderColor.withValues(alpha: 0.3),
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, color: AppTheme.accentColor, size: 20),
+              SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: AppTheme.labelMedium),
+                    SizedBox(height: 4),
+                    Text(
+                      '${selectedDate.day}/${selectedDate.month}/${selectedDate.year}',
+                      style: AppTheme.bodyMedium.copyWith(
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.arrow_forward_ios, color: AppTheme.textHint, size: 16),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Edited showAddActivationDialog method
   Future<void> showAddActivationDialog(BuildContext context) async {
+    // Initialize values
     activationDatePicker = DateTime.now();
     repaymentDate = DateTime.now().add(Duration(days: 30));
     pricePaidController.clear();
@@ -242,308 +1041,7 @@ class User {
                 ],
               ),
               content: SingleChildScrollView(
-                child: SizedBox(
-                  width: MediaQuery.of(context).size.width * 0.8,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // User info display
-                      Container(
-                        padding: EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: AppTheme.primaryColor.withValues(alpha: .1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(Icons.person, color: AppTheme.primaryColor),
-                            SizedBox(width: 8),
-                            Text('$name ($userId)', style: AppTheme.bodyMedium),
-                          ],
-                        ),
-                      ),
-                      SizedBox(height: 20),
-
-                      // Activation Date Picker
-                      _buildDatePicker(
-                        context: context,
-                        setState: setState,
-                        title: 'Activation Date',
-                        selectedDate: activationDatePicker,
-                        icon: Icons.calendar_month,
-                        onDateSelected: (picked) {
-                          setState(() {
-                            activationDatePicker = picked;
-                          });
-                        },
-                      ),
-                      SizedBox(height: 20),
-
-                      // Subscription Type Dropdown
-                      Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: .1),
-                              blurRadius: 4,
-                              offset: Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: DropdownButtonFormField<String>(
-                          value: selectedSubscriptionType,
-                          decoration: AppTheme.inputDecoration(
-                            'Subscription Type',
-                          ),
-                          dropdownColor: AppTheme.surfaceColor,
-                          icon: Icon(
-                            Icons.arrow_drop_down,
-                            color: AppTheme.accentColor,
-                          ),
-                          style: AppTheme.bodyMedium,
-                          items: [
-                            // Category A Header
-                            DropdownMenuItem<String>(
-                              value: null,
-                              enabled: false,
-                              child: Container(
-                                padding: EdgeInsets.symmetric(vertical: 8.0),
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.local_offer,
-                                      color: AppTheme.primaryColor,
-                                      size: 16,
-                                    ),
-                                    SizedBox(width: 8),
-                                    Text(
-                                      'الاشتراك الوطني',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: AppTheme.primaryColor,
-                                        fontSize: 14,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            // Category A Items
-                            ...subscriptionTypesA.map((String type) {
-                              return DropdownMenuItem<String>(
-                                value: type,
-                                child: Padding(
-                                  padding: EdgeInsets.only(left: 24.0),
-                                  child: Row(
-                                    children: [
-                                      Container(
-                                        width: 8,
-                                        height: 8,
-                                        decoration: BoxDecoration(
-                                          color: AppTheme.secondaryColor,
-                                          shape: BoxShape.circle,
-                                        ),
-                                      ),
-                                      SizedBox(width: 12),
-                                      Text(type, style: AppTheme.bodyMedium),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            }),
-
-                            // Divider
-                            DropdownMenuItem<String>(
-                              value: null,
-                              enabled: false,
-                              child: Divider(
-                                height: 1,
-                                color: AppTheme.borderColor,
-                                thickness: 1,
-                              ),
-                            ),
-
-                            // Category B Header
-                            DropdownMenuItem<String>(
-                              value: null,
-                              enabled: false,
-                              child: Container(
-                                padding: EdgeInsets.symmetric(vertical: 8.0),
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.cell_tower,
-                                      color: AppTheme.accentColor,
-                                      size: 16,
-                                    ),
-                                    SizedBox(width: 8),
-                                    Text(
-                                      'اشتراك البرج',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: AppTheme.accentColor,
-                                        fontSize: 14,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            // Category B Items
-                            ...subscriptionTypesB.map((String type) {
-                              return DropdownMenuItem<String>(
-                                value: type,
-                                child: Padding(
-                                  padding: EdgeInsets.only(left: 24.0),
-                                  child: Row(
-                                    children: [
-                                      Container(
-                                        width: 8,
-                                        height: 8,
-                                        decoration: BoxDecoration(
-                                          color: AppTheme.accentColor,
-                                          shape: BoxShape.circle,
-                                        ),
-                                      ),
-                                      SizedBox(width: 12),
-                                      Text(type, style: AppTheme.bodyMedium),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            }),
-                          ],
-                          onChanged: (String? newValue) {
-                            if (newValue != null) {
-                              setState(() {
-                                selectedSubscriptionType = newValue;
-                              });
-                            }
-                          },
-                        ),
-                      ),
-                      SizedBox(height: 20),
-
-                      // Payment Method Dropdown
-                      Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.1),
-                              blurRadius: 4,
-                              offset: Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: DropdownButtonFormField<String>(
-                          value: selectedPaymentMethod,
-                          decoration: AppTheme.inputDecoration(
-                            'Payment Method',
-                          ),
-                          dropdownColor: AppTheme.surfaceColor,
-                          icon: Icon(
-                            Icons.payment,
-                            color: AppTheme.successColor,
-                          ),
-                          style: AppTheme.bodyMedium,
-                          items: paymentMethods.map((String method) {
-                            return DropdownMenuItem<String>(
-                              value: method,
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    _getPaymentIcon(method),
-                                    color: AppTheme.successColor,
-                                    size: 18,
-                                  ),
-                                  SizedBox(width: 12),
-                                  Text(method, style: AppTheme.bodyMedium),
-                                ],
-                              ),
-                            );
-                          }).toList(),
-                          onChanged: (String? newValue) {
-                            setState(() {
-                              selectedPaymentMethod = newValue!;
-                            });
-                          },
-                        ),
-                      ),
-                      SizedBox(height: 20),
-
-                      // Price Paid TextField
-                      Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: .1),
-                              blurRadius: 4,
-                              offset: Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: TextField(
-                          controller: pricePaidController,
-                          decoration: AppTheme.inputDecoration('How much paid?')
-                              .copyWith(
-                                prefixIcon: Icon(
-                                  Icons.attach_money,
-                                  color: AppTheme.successColor,
-                                ),
-                              ),
-                          style: AppTheme.bodyMedium,
-                          keyboardType: TextInputType.number,
-                        ),
-                      ),
-                      SizedBox(height: 20),
-
-                      // Repayment Date Picker
-                      _buildDatePicker(
-                        context: context,
-                        setState: setState,
-                        title: 'Repayment Date',
-                        selectedDate: repaymentDate,
-                        icon: Icons.schedule,
-                        onDateSelected: (picked) {
-                          setState(() {
-                            repaymentDate = picked;
-                          });
-                        },
-                      ),
-                      SizedBox(height: 20),
-
-                      // Notes TextField
-                      Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: .1),
-                              blurRadius: 4,
-                              offset: Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: TextField(
-                          controller: notesController,
-                          maxLines: 3,
-                          decoration: AppTheme.inputDecoration('Notes')
-                              .copyWith(
-                                prefixIcon: Icon(
-                                  Icons.note,
-                                  color: AppTheme.secondaryColor,
-                                ),
-                                alignLabelWithHint: true,
-                              ),
-                          style: AppTheme.bodyMedium,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+                child: _buildAddActivationContent(context, setState),
               ),
               actions: <Widget>[
                 TextButton(
@@ -565,13 +1063,17 @@ class User {
                   ),
                   onPressed: () {
                     // Create new activation
-                    double pricePaid = double.tryParse(pricePaidController.text) ?? 0;
-                    double fullPrice = _getSubscriptionPrice(selectedSubscriptionType!);
-                    
+                    double pricePaid =
+                        double.tryParse(pricePaidController.text) ?? 0;
+                    double fullPrice = _getSubscriptionPrice(
+                      selectedSubscriptionType!,
+                    );
+
                     Activations newActivation = Activations(
                       activationDate: activationDatePicker,
                       expiryDate: repaymentDate,
                       type: selectedSubscriptionType!,
+                      tower: selectedTowerType!,
                       paymentMethod: selectedPaymentMethod,
                       status: true,
                       pricePaid: pricePaid,
@@ -582,7 +1084,6 @@ class User {
 
                     addActivation(newActivation);
                     Navigator.of(context).pop();
-                    
                     // Show success message
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
@@ -597,6 +1098,346 @@ class User {
           },
         );
       },
+    );
+  }
+
+  // Edited _buildAddActivationContent method
+  Widget _buildAddActivationContent(
+    BuildContext context,
+    StateSetter setState,
+  ) {
+    return SizedBox(
+      width: MediaQuery.of(context).size.width * 0.8,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppTheme.primaryColor.withValues(alpha: .1),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.person, color: AppTheme.primaryColor),
+                SizedBox(width: 8),
+                Text('$userName ($userId)', style: AppTheme.bodyMedium),
+              ],
+            ),
+          ),
+          SizedBox(height: 20),
+
+          // Activation Date Picker - CHANGED: Now uses static method
+          User.buildDatePicker(
+            context: context,
+            setState: setState,
+            title: 'Activation Date',
+            selectedDate: activationDatePicker,
+            icon: Icons.calendar_month,
+            onDateSelected: (picked) {
+              setState(() {
+                activationDatePicker = picked;
+              });
+            },
+          ),
+          SizedBox(height: 20),
+
+          // Subscription Type Dropdown
+          Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: .1),
+                  blurRadius: 4,
+                  offset: Offset(0, 2),
+                ),
+              ],
+            ),
+            child: DropdownButtonFormField<String>(
+              value: selectedSubscriptionType,
+              decoration: AppTheme.inputDecoration('Subscription Type'),
+              dropdownColor: AppTheme.surfaceColor,
+              icon: Icon(Icons.arrow_drop_down, color: AppTheme.accentColor),
+              style: AppTheme.bodyMedium,
+              items: [
+                // Category A Header
+                DropdownMenuItem<String>(
+                  value: null,
+                  enabled: false,
+                  child: Container(
+                    padding: EdgeInsets.symmetric(vertical: 8.0),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.local_offer,
+                          color: AppTheme.primaryColor,
+                          size: 16,
+                        ),
+                        SizedBox(width: 8),
+                        Text(
+                          'الاشتراك الوطني',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.primaryColor,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                // Category A Items
+                ...subscriptionTypesA.map((String type) {
+                  return DropdownMenuItem<String>(
+                    value: type,
+                    child: Padding(
+                      padding: EdgeInsets.only(left: 24.0),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              color: AppTheme.secondaryColor,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          SizedBox(width: 12),
+                          Text(type, style: AppTheme.bodyMedium),
+                        ],
+                      ),
+                    ),
+                  );
+                }),
+
+                // Divider
+                DropdownMenuItem<String>(
+                  value: null,
+                  enabled: false,
+                  child: Divider(
+                    height: 1,
+                    color: AppTheme.borderColor,
+                    thickness: 1,
+                  ),
+                ),
+
+                // Category B Header
+                DropdownMenuItem<String>(
+                  value: null,
+                  enabled: false,
+                  child: Container(
+                    padding: EdgeInsets.symmetric(vertical: 8.0),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.cell_tower,
+                          color: AppTheme.accentColor,
+                          size: 16,
+                        ),
+                        SizedBox(width: 8),
+                        Text(
+                          'اشتراك البرج',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.accentColor,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                // Category B Items
+                ...subscriptionTypesB.map((String type) {
+                  return DropdownMenuItem<String>(
+                    value: type,
+                    child: Padding(
+                      padding: EdgeInsets.only(left: 24.0),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              color: AppTheme.accentColor,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          SizedBox(width: 12),
+                          Text(type, style: AppTheme.bodyMedium),
+                        ],
+                      ),
+                    ),
+                  );
+                }),
+              ],
+              onChanged: (String? newValue) {
+                if (newValue != null) {
+                  setState(() {
+                    selectedSubscriptionType = newValue;
+                  });
+                }
+              },
+            ),
+          ),
+          SizedBox(height: 20),
+
+          // Tower Dropdown
+          Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.1),
+                  blurRadius: 4,
+                  offset: Offset(0, 2),
+                ),
+              ],
+            ),
+            child: DropdownButtonFormField<String>(
+              value: selectedTowerType,
+              decoration: AppTheme.inputDecoration('Tower'),
+              dropdownColor: AppTheme.surfaceColor,
+              icon: Icon(Icons.arrow_drop_down, color: AppTheme.accentColor),
+              style: AppTheme.bodyMedium,
+              items: towers.map((String type) {
+                return DropdownMenuItem<String>(
+                  value: type,
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.cell_tower,
+                        color: const Color.fromARGB(255, 226, 231, 226),
+                        size: 18,
+                      ),
+                      Padding(
+                        padding: EdgeInsets.only(left: 24.0),
+                        child: Text(type, style: AppTheme.bodyMedium),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+              onChanged: (String? newValue) {
+                if (newValue != null) {
+                  setState(() {
+                    selectedTowerType = newValue;
+                  });
+                }
+              },
+            ),
+          ),
+          SizedBox(height: 16),
+
+          // Payment Method Dropdown
+          Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.1),
+                  blurRadius: 4,
+                  offset: Offset(0, 2),
+                ),
+              ],
+            ),
+            child: DropdownButtonFormField<String>(
+              value: selectedPaymentMethod,
+              decoration: AppTheme.inputDecoration('Payment Method'),
+              dropdownColor: AppTheme.surfaceColor,
+              icon: Icon(Icons.payment, color: AppTheme.successColor),
+              style: AppTheme.bodyMedium,
+              items: paymentMethods.map((String method) {
+                return DropdownMenuItem<String>(
+                  value: method,
+                  child: Row(
+                    children: [
+                      Icon(
+                        _getPaymentIcon(method),
+                        color: AppTheme.successColor,
+                        size: 18,
+                      ),
+                      SizedBox(width: 12),
+                      Text(method, style: AppTheme.bodyMedium),
+                    ],
+                  ),
+                );
+              }).toList(),
+              onChanged: (String? newValue) {
+                setState(() {
+                  selectedPaymentMethod = newValue!;
+                });
+              },
+            ),
+          ),
+          SizedBox(height: 20),
+
+          // Price Paid TextField
+          Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: .1),
+                  blurRadius: 4,
+
+                  offset: Offset(0, 2),
+                ),
+              ],
+            ),
+            child: TextField(
+              controller: pricePaidController,
+              decoration: AppTheme.inputDecoration('How much paid?').copyWith(
+                prefixIcon: Icon(
+                  Icons.attach_money,
+                  color: AppTheme.successColor,
+                ),
+              ),
+              style: AppTheme.bodyMedium,
+              keyboardType: TextInputType.number,
+            ),
+          ),
+          SizedBox(height: 20),
+
+          // Repayment Date Picker - CHANGED: Now uses static method
+          User.buildDatePicker(
+            context: context,
+            setState: setState,
+            title: 'Repayment Date',
+            selectedDate: repaymentDate,
+            icon: Icons.schedule,
+            onDateSelected: (picked) {
+              setState(() {
+                repaymentDate = picked;
+              });
+            },
+          ),
+          SizedBox(height: 20),
+
+          // Notes TextField
+          Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: .1),
+                  blurRadius: 4,
+                  offset: Offset(0, 2),
+                ),
+              ],
+            ),
+            child: TextField(
+              controller: notesController,
+              maxLines: 3,
+              decoration: AppTheme.inputDecoration('Notes').copyWith(
+                prefixIcon: Icon(Icons.note, color: AppTheme.secondaryColor),
+                alignLabelWithHint: true,
+              ),
+              style: AppTheme.bodyMedium,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -618,7 +1459,7 @@ class User {
                   Container(
                     padding: EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: AppTheme.primaryColor.withValues(alpha:0.1),
+                      color: AppTheme.primaryColor.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Icon(
@@ -633,7 +1474,7 @@ class User {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          '$name\'s Activations',
+                          '$userName\'s Activations',
                           style: AppTheme.titleMedium,
                         ),
                         Text(
@@ -656,9 +1497,9 @@ class User {
                         margin: EdgeInsets.only(bottom: 16),
                         padding: EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: AppTheme.errorColor.withValues(alpha:0.1),
+                          color: AppTheme.errorColor.withValues(alpha: 0.1),
                           border: Border.all(
-                            color: AppTheme.errorColor.withValues(alpha:0.3),
+                            color: AppTheme.errorColor.withValues(alpha: 0.3),
                           ),
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -698,10 +1539,8 @@ class User {
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                               ),
-                              onPressed: () => _showDebtManagementDialog(
-                                context,
-                                setState,
-                              ),
+                              onPressed: () =>
+                                  _showDebtManagementDialog(context, setState),
                               icon: Icon(Icons.payment, size: 16),
                               label: Text('Manage Debts'),
                             ),
@@ -753,6 +1592,7 @@ class User {
   }
 
   // Helper widget for date pickers
+  // ignore: unused_element
   Widget _buildDatePicker({
     required BuildContext context,
     required StateSetter setState,
@@ -865,7 +1705,7 @@ class User {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: activation.hasDebt
-              ? AppTheme.errorColor.withValues(alpha:0.3)
+              ? AppTheme.errorColor.withValues(alpha: 0.3)
               : AppTheme.borderColor,
           width: activation.hasDebt ? 2 : 1,
         ),
@@ -876,7 +1716,7 @@ class User {
         leading: Container(
           padding: EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: activation.statusColor.withValues(alpha:0.1),
+            color: activation.statusColor.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Icon(
@@ -928,7 +1768,10 @@ class User {
             children: [
               _buildStatusChip(activation.statusText, activation.statusColor),
               SizedBox(width: 8),
-              _buildStatusChip(activation.paymentMethod, AppTheme.secondaryColor),
+              _buildStatusChip(
+                activation.paymentMethod,
+                AppTheme.secondaryColor,
+              ),
             ],
           ),
         ),
@@ -1026,12 +1869,8 @@ class User {
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                  onPressed: () => _showPaymentDialog(
-                    context,
-                    activation,
-                    index,
-                    setState,
-                  ),
+                  onPressed: () =>
+                      _showPaymentDialog(context, activation, index, setState),
                   icon: Icon(Icons.payment, size: 16),
                   label: Text('Pay Debt'),
                 ),
@@ -1126,7 +1965,9 @@ class User {
                           ),
                           suffixText: 'USD',
                         ),
-                    keyboardType: TextInputType.numberWithOptions(decimal: true),
+                    keyboardType: TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
                     style: AppTheme.bodyMedium,
                   ),
                   SizedBox(height: 16),
@@ -1135,11 +1976,14 @@ class User {
                       Expanded(
                         child: ElevatedButton(
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: AppTheme.primaryColor.withValues(alpha:0.2),
+                            backgroundColor: AppTheme.primaryColor.withValues(
+                              alpha: 0.2,
+                            ),
                             foregroundColor: AppTheme.primaryColor,
                           ),
                           onPressed: () {
-                            paymentController.text = remainingDebt.toStringAsFixed(2);
+                            paymentController.text = remainingDebt
+                                .toStringAsFixed(2);
                           },
                           child: Text('Pay Full Amount'),
                         ),
@@ -1157,10 +2001,12 @@ class User {
                 ElevatedButton(
                   style: AppTheme.primaryButtonStyle,
                   onPressed: () {
-                    double paymentAmount = double.tryParse(paymentController.text) ?? 0;
+                    double paymentAmount =
+                        double.tryParse(paymentController.text) ?? 0;
                     if (paymentAmount > 0 && paymentAmount <= remainingDebt) {
                       // Update the activation with new payment
-                      Activations updatedActivation = activation.copyWithPayment(paymentAmount);
+                      Activations updatedActivation = activation
+                          .copyWithPayment(paymentAmount);
                       updateActivation(index, updatedActivation);
                       parentSetState(() {});
 
@@ -1188,7 +2034,7 @@ class User {
   }
 
   // Debt Management Dialog
-  Future<void> _showDebtManagementDialog(
+  Future<void> showDebtManagementDialog(
     BuildContext context,
     StateSetter parentSetState,
   ) async {
@@ -1199,7 +2045,9 @@ class User {
       builder: (BuildContext context) {
         return AlertDialog(
           backgroundColor: AppTheme.cardColor,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
           title: Row(
             children: [
               Icon(Icons.account_balance_wallet, color: AppTheme.errorColor),
@@ -1216,7 +2064,7 @@ class User {
                 Container(
                   padding: EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: AppTheme.errorColor.withValues(alpha:0.1),
+                    color: AppTheme.errorColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(
@@ -1346,7 +2194,11 @@ class User {
   }
 
   // Helper method to show snack bar
-  void _showSnackBar(BuildContext context, String message, {bool isError = false}) {
+  void _showSnackBar(
+    BuildContext context,
+    String message, {
+    bool isError = false,
+  }) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
@@ -1356,7 +2208,10 @@ class User {
               color: Colors.white,
             ),
             SizedBox(width: 12),
-            Text(message, style: AppTheme.bodyMedium.copyWith(color: Colors.white)),
+            Text(
+              message,
+              style: AppTheme.bodyMedium.copyWith(color: Colors.white),
+            ),
           ],
         ),
         backgroundColor: isError ? AppTheme.errorColor : AppTheme.successColor,
@@ -1368,7 +2223,7 @@ class User {
   }
 
   // Helper Widgets
-  Widget _buildEmptyState() {
+  Widget buildEmptyState() {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -1395,11 +2250,15 @@ class User {
       decoration: BoxDecoration(
         color: color.withValues(alpha: .1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha:0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Text(
         text,
-        style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w500),
+        style: TextStyle(
+          color: color,
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+        ),
       ),
     );
   }
@@ -1416,7 +2275,9 @@ class User {
               Text(label, style: AppTheme.labelMedium),
               Text(
                 value,
-                style: AppTheme.bodyMedium.copyWith(fontWeight: FontWeight.w600),
+                style: AppTheme.bodyMedium.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ],
           ),
@@ -1427,9 +2288,13 @@ class User {
 
   // Helper Functions
   IconData _getSubscriptionIcon(String type) {
-    if (type.contains('وطني') || type.toLowerCase().contains('national') || type.startsWith('A')) {
+    if (type.contains('وطني') ||
+        type.toLowerCase().contains('national') ||
+        type.startsWith('A')) {
       return Icons.public;
-    } else if (type.contains('برج') || type.toLowerCase().contains('tower') || type.startsWith('B')) {
+    } else if (type.contains('برج') ||
+        type.toLowerCase().contains('tower') ||
+        type.startsWith('B')) {
       return Icons.cell_tower;
     }
     return Icons.subscriptions;
@@ -1439,7 +2304,6 @@ class User {
     return '${date.day}/${date.month}/${date.year}';
   }
 }
-
 
 class UserAdapter extends TypeAdapter<User> {
   @override
@@ -1452,8 +2316,8 @@ class UserAdapter extends TypeAdapter<User> {
       for (int i = 0; i < numOfFields; i++) reader.readByte(): reader.read(),
     };
     return User(
-      name: fields[0] as String,
-      userId: fields[1] as String,
+      userName: fields[0] as String,
+      userId: fields[1] as int,
       phone: fields[2] as String,
       notes: fields[3] as String,
       activations: (fields[4] as List?)?.cast<Activations>(),
@@ -1465,7 +2329,7 @@ class UserAdapter extends TypeAdapter<User> {
     writer
       ..writeByte(5)
       ..writeByte(0)
-      ..write(obj.name)
+      ..write(obj.userName)
       ..writeByte(1)
       ..write(obj.userId)
       ..writeByte(2)

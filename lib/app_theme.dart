@@ -1,27 +1,53 @@
 import 'package:flutter/material.dart';
 
 class AppTheme {
-  static const TextStyle tableColumnText = TextStyle(color: Color.fromARGB(255, 167, 166, 166), fontWeight: FontWeight.bold);
-  static const TextStyle tableCellText = TextStyle(color: Colors.white);
-  static const TextStyle buttonTextStyle = TextStyle(color: Colors.white);
+  // Custom text styles using theme variables
+  static TextStyle get headerTextStyle => TextStyle(
+    color: AppTheme.textPrimary,
+    fontWeight: FontWeight.w600,
+    fontSize: 14,
+    letterSpacing: 0.5,
+  );
 
+  static TextStyle get cellTextStyle => TextStyle(
+    color: AppTheme.textPrimary,
+    fontWeight: FontWeight.w400,
+    fontSize: 13,
+  );
 
-  static ButtonStyle buttonStyle = ButtonStyle(backgroundColor: WidgetStateProperty.all(const Color.fromARGB(255, 17, 135, 4)));
+  static TextStyle get subscriptionTextStyle => TextStyle(
+    color: AppTheme.accentColor,
+    fontWeight: FontWeight.w500,
+    fontSize: 12,
+  );
+
+  static TextStyle get noSubscriptionTextStyle => TextStyle(
+    color: AppTheme.textHint,
+    fontWeight: FontWeight.w400,
+    fontSize: 12,
+    fontStyle: FontStyle.italic,
+  );
+
+  static ButtonStyle buttonStyle = ButtonStyle(
+    backgroundColor: WidgetStateProperty.all(
+      const Color.fromARGB(255, 17, 135, 4),
+    ),
+  );
 
   static const Color iconsColor = Color.fromARGB(255, 255, 102, 7);
 
-static const Color primaryColor = Color(0xFF6C63FF);      // Modern purple
-  static const Color secondaryColor = Color(0xFF03DAC6);    // Teal accent
-  static const Color accentColor = Color(0xFFFF6B35);       // Orange accent
-  static const Color backgroundColor = Color(0xFF121212);    // Dark background
-  static const Color surfaceColor = Color(0xFF1E1E1E);      // Card/surface color
-  static const Color cardColor = Color(0xFF2D2D2D);         // Elevated card color
-  static const Color textPrimary = Color(0xFFFFFFFF);       // White text
-  static const Color textSecondary = Color(0xFFB3B3B3);     // Gray text
-  static const Color textHint = Color(0xFF757575);          // Hint text
-  static const Color borderColor = Color(0xFF404040);       // Border color
-  static const Color successColor = Color(0xFF4CAF50);      // Success green
-  static const Color errorColor = Color(0xFFFF5252);        // Error red
+  static const Color primaryColor = Color.fromARGB(255, 255, 102, 7); // Modern purple
+  static const Color secondaryColor = Color(0xFF03DAC6); // Teal accent
+  static const Color accentColor = Color.fromARGB(255, 16, 182, 35); // Orange accent
+  static const Color backgroundColor = Color(0xFF121212); // Dark background
+  static const Color surfaceColor = Color(0xFF1E1E1E); // Card/surface color
+  static const Color cardColor = Color(0xFF2D2D2D); // Elevated card color
+  static const Color textPrimary = Color(0xFFFFFFFF); // White text
+  static const Color textSecondary = Color(0xFFB3B3B3); // Gray text
+  static const Color textHint = Color(0xFF757575); // Hint text
+  static const Color borderColor = Color(0xFF404040); // Border color
+  static const Color successColor = Color(0xFF4CAF50); // Success green
+  static const Color errorColor = Color(0xFFFF5252); // Error red
 
   // Text Styles
   static const TextStyle titleLarge = TextStyle(
@@ -107,31 +133,21 @@ static const Color primaryColor = Color(0xFF6C63FF);      // Modern purple
     foregroundColor: textPrimary,
     elevation: 2,
     shadowColor: primaryColor.withValues(alpha: .3),
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(12),
-    ),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     padding: EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-    textStyle: TextStyle(
-      fontSize: 16,
-      fontWeight: FontWeight.w600,
-    ),
+    textStyle: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
   );
 
   static ButtonStyle textButtonStyle = TextButton.styleFrom(
     foregroundColor: textSecondary,
-    textStyle: TextStyle(
-      fontSize: 16,
-      fontWeight: FontWeight.w500,
-    ),
+    textStyle: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
   );
 
   // Dialog Theme
   static DialogTheme dialogTheme = DialogTheme(
     backgroundColor: cardColor,
     elevation: 8,
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(20),
-    ),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
     titleTextStyle: titleLarge,
     contentTextStyle: bodyMedium,
   );

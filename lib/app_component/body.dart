@@ -1,7 +1,6 @@
 // ignore_for_file: unused_local_variable
 
 import 'package:flutter/material.dart';
-import 'package:users_management/app_component/users_info.dart';
 import 'package:users_management/app_component/users_list.dart';
 
 class Body extends StatefulWidget {
@@ -38,7 +37,7 @@ class _BodyState extends State<Body> {
             } else {
               return
               // SizedBox(width: namesWidth, child: UsersList());
-              SizedBox(width: double.infinity, child: TableExample());
+              SizedBox(width: double.infinity, );
             }
             // else {
             // // Desktop format

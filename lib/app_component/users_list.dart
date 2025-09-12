@@ -16,14 +16,14 @@ class UsersList extends StatelessWidget {
           margin: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           child: ListTile(
             leading: Text(
-              usersList[index].userId,
+              usersList[index].userId.toString(),
               style: TextStyle(
                 backgroundColor: const Color.fromARGB(255, 194, 193, 193),
                 color: const Color.fromARGB(255, 4, 4, 4),
                 fontWeight: FontWeight.w500,
               ),
             ),
-            title: Text(usersList[index].name, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),),
+            title: Text(usersList[index].userName, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),),
             // subtitle: Text('User ID: ${index + 1}', style: TextStyle(fontSize: 14, color: Colors.grey),),
             onTap: (){},
           ),
